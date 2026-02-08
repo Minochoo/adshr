@@ -1,5 +1,4 @@
 import requests
-import itertools
 import csv
 import time
 import random
@@ -9,96 +8,105 @@ import random
 # ==============================
 TLD = ".com"
 BATCH_SIZE = 40
-SLEEP_BETWEEN_BATCHES = 0.50
-OUTPUT_CSV = "generated_domains_results.csv"
+SLEEP_BETWEEN_BATCHES = 0.5
+OUTPUT_CSV = "available_only_unique_domains.csv"
+TOTAL_DOMAINS_TO_GENERATE = 3000
 
-HEADERS = { 
-    'User-Agent': "Mozilla/5.0 (Linux; Android 10)",
-    'Accept': "application/json"
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Linux; Android 10)",
+    "Accept": "application/json"
 }
 
 BASE_URL = "https://domains.revved.com/v1/domainStatus"
 RCS_PARAM = "Mms%2FKCVrc3hxcHl5ent%2FcH5laydrc2t%2BeSx7LS9%2BcXF%2BfXhxfHt4LX8qLS15f3BxenlxKn1%2Ff2s0"
 
 # ==============================
-# LETTER POOLS FOR 5-CHAR BRANDABLE DOMAINS
+# SMART LETTER POOLS
 # ==============================
-CONSONANTS = "bcdfglmnprstv"
 VOWELS = "aeio"
+SOFT_CONSONANTS = "blmnrsdtv"
+TECH_CONSONANTS = "xzk"
+ALL_CONSONANTS = SOFT_CONSONANTS + TECH_CONSONANTS
 
 # ==============================
-# GENERATE DOMAINS AUTOMATICALLY
+# BRANDABLE PATTERNS
 # ==============================
-def generate_domains(n_domains=1000):
+PATTERNS = [
+    "CVCVC",
+    "CVCCV",
+    "CVCVX",
+    "CVVCV"
+]
+
+# ==============================
+# DOMAIN GENERATOR (UNIQUE)
+# ==============================
+def generate_domains():
     generated = set()
-    while len(generated) < n_domains:
-        # اختيار نمط CVCVC
-        c1 = random.choice(CONSONANTS)
-        v1 = random.choice(VOWELS)
-        c2 = random.choice(CONSONANTS)
-        v2 = random.choice(VOWELS)
-        c3 = random.choice(CONSONANTS)
 
-        domain = f"{c1}{v1}{c2}{v2}{c3}{TLD}"
+    while len(generated) < TOTAL_DOMAINS_TO_GENERATE:
+        pattern = random.choice(PATTERNS)
+        name = ""
 
-        # التأكد من عدم التكرار
-        if domain not in generated:
-            generated.add(domain)
-            yield domain
+        for char in pattern:
+            if char == "C":
+                name += random.choice(ALL_CONSONANTS)
+            elif char == "V":
+                name += random.choice(VOWELS)
+            elif char == "X":
+                name += random.choice("xz")
+
+        # فلترة إضافية (جمالية)
+        if any(bad in name for bad in ["zx", "q", "aa", "ii"]):
+            continue
+
+        full_domain = name + TLD
+
+        if full_domain not in generated:
+            generated.add(full_domain)
+            yield full_domain
 
 # ==============================
 # CHECK BATCH
 # ==============================
-def check_batch(domains_batch):
-    domains_param = ",".join(domains_batch)
+def check_batch(domains):
+    domains_param = ",".join(domains)
     url = f"{BASE_URL}?domains={domains_param}&rcs={RCS_PARAM}"
 
     try:
-        resp = requests.get(url, headers=HEADERS, timeout=15)
-        data = resp.json()
-        results = []
-
-        for entry in data.get("status", []):
-            name = entry.get("name")
-            available = entry.get("available")
-            premium = entry.get("premium")
-            fee = entry.get("fee", {})
-
-            price = fee.get("retailAmount")
-
-            results.append((name, available, premium, price))
-
-        return results
-
-    except Exception:
-        return [(d, "error", None, None) for d in domains_batch]
+        r = requests.get(url, headers=HEADERS, timeout=15)
+        data = r.json()
+        return data.get("status", [])
+    except:
+        return []
 
 # ==============================
-# MAIN EXECUTION
+# MAIN
 # ==============================
-def run_check():
-    all_domains = list(generate_domains(n_domains=1000))
-    print(f"Total domains to check: {len(all_domains)}")
+def run():
+    domains = list(generate_domains())
+    print(f"[+] Generated {len(domains)} unique domains")
 
-    with open(OUTPUT_CSV, mode="w", newline="", encoding="utf-8") as csvfile:
-        writer = csv.writer(csvfile)
-        writer.writerow(["domain", "status", "premium", "price"])
+    with open(OUTPUT_CSV, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(["domain", "premium", "price"])
 
-        for i in range(0, len(all_domains), BATCH_SIZE):
-            batch = all_domains[i:i+BATCH_SIZE]
+        for i in range(0, len(domains), BATCH_SIZE):
+            batch = domains[i:i+BATCH_SIZE]
             results = check_batch(batch)
 
-            for domain, status, premium, price in results:
-                status_str = "Available" if status is True else "Taken" if status is False else status
-                writer.writerow([domain, status_str, premium, price])
+            for entry in results:
+                if entry.get("available") is True:
+                    domain = entry.get("name")
+                    premium = entry.get("premium")
+                    price = entry.get("fee", {}).get("retailAmount")
 
-                if status_str == "Available":
-                    print(f"Available: {domain} | Premium: {premium} | Price: {price}")
+                    writer.writerow([domain, premium, price])
+                    print(f"[AVAILABLE] {domain} | Premium={premium} | Price={price}")
 
             time.sleep(SLEEP_BETWEEN_BATCHES)
 
-    print(f"Finished. Results saved to {OUTPUT_CSV}")
-
+    print(f"\n✅ Done. Saved only AVAILABLE domains to {OUTPUT_CSV}")
 
 if __name__ == "__main__":
-    run_check()
+    run()
