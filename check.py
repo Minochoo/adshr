@@ -9,8 +9,8 @@ import random
 TLD = ".com"
 BATCH_SIZE = 40
 SLEEP_BETWEEN_BATCHES = 0.5
-OUTPUT_CSV = "available_only_unique_domains.csv"
-TOTAL_DOMAINS_TO_GENERATE = 3000
+OUTPUT_CSV = "available_brandable_domains.csv"
+TOTAL_DOMAINS = 3000
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Linux; Android 10)",
@@ -21,62 +21,70 @@ BASE_URL = "https://domains.revved.com/v1/domainStatus"
 RCS_PARAM = "Mms%2FKCVrc3hxcHl5ent%2FcH5laydrc2t%2BeSx7LS9%2BcXF%2BfXhxfHt4LX8qLS15f3BxenlxKn1%2Ff2s0"
 
 # ==============================
-# SMART LETTER POOLS
+# PHONETIC LETTER SETS (CLEAN)
 # ==============================
 VOWELS = "aeio"
-SOFT_CONSONANTS = "blmnrsdtv"
-TECH_CONSONANTS = "xzk"
-ALL_CONSONANTS = SOFT_CONSONANTS + TECH_CONSONANTS
+CONSONANTS = "blmnrsdtvpf"  # ناعمة فقط – تشبه أسماء شركات
 
 # ==============================
 # BRANDABLE PATTERNS
 # ==============================
 PATTERNS = [
     "CVCVC",
-    "CVCCV",
-    "CVCVX",
-    "CVVCV"
+    "CVCCV"
 ]
 
 # ==============================
-# DOMAIN GENERATOR (UNIQUE)
+# PHONETIC RULES
+# ==============================
+def is_pronounceable(name: str) -> bool:
+    bad_pairs = ["aa", "ee", "ii", "oo", "rr", "ll"]
+    bad_clusters = ["dt", "pf", "sr"]
+
+    for bp in bad_pairs:
+        if bp in name:
+            return False
+
+    for bc in bad_clusters:
+        if bc in name:
+            return False
+
+    return True
+
+# ==============================
+# DOMAIN GENERATOR (BRANDABLE)
 # ==============================
 def generate_domains():
     generated = set()
 
-    while len(generated) < TOTAL_DOMAINS_TO_GENERATE:
+    while len(generated) < TOTAL_DOMAINS:
         pattern = random.choice(PATTERNS)
         name = ""
 
-        for char in pattern:
-            if char == "C":
-                name += random.choice(ALL_CONSONANTS)
-            elif char == "V":
+        for ch in pattern:
+            if ch == "C":
+                name += random.choice(CONSONANTS)
+            else:
                 name += random.choice(VOWELS)
-            elif char == "X":
-                name += random.choice("xz")
 
-        # فلترة إضافية (جمالية)
-        if any(bad in name for bad in ["zx", "q", "aa", "ii"]):
+        if not is_pronounceable(name):
             continue
 
-        full_domain = name + TLD
+        domain = name + TLD
 
-        if full_domain not in generated:
-            generated.add(full_domain)
-            yield full_domain
+        if domain not in generated:
+            generated.add(domain)
+            yield domain
 
 # ==============================
 # CHECK BATCH
 # ==============================
 def check_batch(domains):
-    domains_param = ",".join(domains)
-    url = f"{BASE_URL}?domains={domains_param}&rcs={RCS_PARAM}"
+    url = f"{BASE_URL}?domains={','.join(domains)}&rcs={RCS_PARAM}"
 
     try:
         r = requests.get(url, headers=HEADERS, timeout=15)
-        data = r.json()
-        return data.get("status", [])
+        return r.json().get("status", [])
     except:
         return []
 
@@ -85,7 +93,7 @@ def check_batch(domains):
 # ==============================
 def run():
     domains = list(generate_domains())
-    print(f"[+] Generated {len(domains)} unique domains")
+    print(f"[+] Generated {len(domains)} brandable domains")
 
     with open(OUTPUT_CSV, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
@@ -102,11 +110,11 @@ def run():
                     price = entry.get("fee", {}).get("retailAmount")
 
                     writer.writerow([domain, premium, price])
-                    print(f"[AVAILABLE] {domain} | Premium={premium} | Price={price}")
+                    print(f"[AVAILABLE] {domain}")
 
             time.sleep(SLEEP_BETWEEN_BATCHES)
 
-    print(f"\n✅ Done. Saved only AVAILABLE domains to {OUTPUT_CSV}")
+    print(f"\n✅ Finished. Only BRANDABLE available domains saved.")
 
 if __name__ == "__main__":
     run()
