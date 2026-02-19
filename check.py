@@ -23,7 +23,7 @@ RCS_PARAM = "Mms%2FKCVrc3hxcHl5ent%2FcH5laydrc2t%2BeSx7LS9%2BcXF%2BfXhxfHt4LX8qL
 # ==============================
 # PREMIUM EXACT-MATCH WORD LIST (300 words)
 # ==============================
-WORDS =
+WORDS = 
     # جذر الفهم والعلم
     "fahim",
     "aleem",
